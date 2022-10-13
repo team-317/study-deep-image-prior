@@ -53,7 +53,8 @@ def skip(
             model_tmp.add(deeper)
         
         model_tmp.add(bn(num_channels_skip[i] + (num_channels_up[i + 1] if i < last_scale else num_channels_down[i])))
-
+        
+        # 往 skip序列中填充结构
         if num_channels_skip[i] != 0:
             skip.add(conv(input_depth, num_channels_skip[i], filter_skip_size, bias=need_bias, pad=pad))
             skip.add(bn(num_channels_skip[i]))
@@ -61,6 +62,7 @@ def skip(
             
         # skip.add(Concat(2, GenNoise(nums_noise[i]), skip_part))
 
+        # 往deeper序列中填充结构
         deeper.add(conv(input_depth, num_channels_down[i], filter_size_down[i], 2, bias=need_bias, pad=pad, downsample_mode=downsample_mode[i]))
         deeper.add(bn(num_channels_down[i]))
         deeper.add(act(act_fun))
@@ -69,17 +71,18 @@ def skip(
         deeper.add(bn(num_channels_down[i]))
         deeper.add(act(act_fun))
 
-        deeper_main = nn.Sequential()
+        deeper_main = nn.Sequential()   # 这是一个空序列
 
         if i == len(num_channels_down) - 1:
             # The deepest
             k = num_channels_down[i]
         else:
-            deeper.add(deeper_main)
+            deeper.add(deeper_main)     # 将空序列嵌入到deeper中
             k = num_channels_up[i + 1]
 
         deeper.add(nn.Upsample(scale_factor=2, mode=upsample_mode[i]))
-
+        
+        # 在 deeper 之后再填充一部分网络结构
         model_tmp.add(conv(num_channels_skip[i] + k, num_channels_up[i], filter_size_up[i], 1, bias=need_bias, pad=pad))
         model_tmp.add(bn(num_channels_up[i]))
         model_tmp.add(act(act_fun))
@@ -91,6 +94,8 @@ def skip(
             model_tmp.add(act(act_fun))
 
         input_depth = num_channels_down[i]
+        # 将空序列 deeper_main 取别名为 model_tmp，在下一次更新中，会将网络填充到这个空序列中
+        # 从而完成嵌套的 U-Net 网络的构建
         model_tmp = deeper_main
 
     model.add(conv(num_channels_up[0], num_output_channels, 1, bias=need_bias, pad=pad))
